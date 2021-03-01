@@ -229,6 +229,8 @@ def evaluation(model, loader_test):
     # Start evaluation phase
     with torch.no_grad():
         for x_batch, y_batch in loader_test:
+
+            x_batch = x_batch.type(torch.LongTensor)
             y_pred = model(x_batch)
             predictions += list(y_pred.detach().numpy())
     return predictions
