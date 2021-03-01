@@ -9,9 +9,8 @@ from sklearn.model_selection import train_test_split
 import re
 from nltk import word_tokenize
 import nltk
-#nltk.download('punkt')
-import math
 from torch.utils.data import Dataset, DataLoader
+from CNN_model import Net
 
 # To solve Intel related matplotlib/torch error.
 import os
@@ -19,116 +18,6 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 # Some aux functions taken from:
 # https://towardsdatascience.com/text-classification-with-cnns-in-pytorch-1113df31e79f
-
-class Net(nn.Module):
-
-    # Define the layers
-    def __init__(self, vocabulary, sequence_length):
-        super(Net, self).__init__()
-
-        # Vocabulary definition
-        self.vocabulary = vocabulary
-        self.num_words: int = 1000
-        self.seq_len = sequence_length
-        self.embedding_size = 64
-
-        # Dropout definition
-        # self.dropout = nn.Dropout(0.2)
-
-        # CNN parameters definition
-        # Kernel sizes
-        self.kernel_1 = 2
-        self.kernel_2 = 3
-        self.kernel_3 = 4
-
-        # Output size for each convolution
-        # number of output channels of the convolution for each layer
-        self.out_size = 32
-
-        # Number of strides for each convolution
-        # number of jumps that will be considered when sliding the window (the kernel)
-        self.stride = 2
-
-        # Embedding layer definition
-        self.embedding = nn.Embedding(self.num_words + 1, self.embedding_size, padding_idx=0)
-
-        # Convolution layers definition
-        self.conv_1 = nn.Conv1d(self.seq_len, self.out_size, self.kernel_1, self.stride)
-        self.conv_2 = nn.Conv1d(self.seq_len, self.out_size, self.kernel_2, self.stride)
-        self.conv_3 = nn.Conv1d(self.seq_len, self.out_size, self.kernel_3, self.stride)
-
-        # Max pooling layers definition
-        self.pool_1 = nn.MaxPool1d(self.kernel_1, self.stride)
-        self.pool_2 = nn.MaxPool1d(self.kernel_2, self.stride)
-        self.pool_3 = nn.MaxPool1d(self.kernel_3, self.stride)
-
-        # Fully connected layer definition
-        self.fc = nn.Linear(self.in_features_fc(), 1)
-
-    def in_features_fc(self):
-        '''Calculates the number of output features after Convolution + Max pooling
-
-        Convolved_Features = ((embedding_size + (2 * padding) - dilation * (kernel - 1) - 1) / stride) + 1
-        Pooled_Features = ((embedding_size + (2 * padding) - dilation * (kernel - 1) - 1) / stride) + 1
-
-        source: https://pytorch.org/docs/stable/generated/torch.nn.Conv1d.html
-        '''
-        # Calculate size of convolved/pooled features for convolution_1/max_pooling_1 features
-        out_conv_1 = ((self.embedding_size - 1 * (self.kernel_1 - 1) - 1) / self.stride) + 1
-        out_conv_1 = math.floor(out_conv_1)
-        out_pool_1 = ((out_conv_1 - 1 * (self.kernel_1 - 1) - 1) / self.stride) + 1
-        out_pool_1 = math.floor(out_pool_1)
-
-        # Calcualte size of convolved/pooled features for convolution_2/max_pooling_2 features
-        out_conv_2 = ((self.embedding_size - 1 * (self.kernel_2 - 1) - 1) / self.stride) + 1
-        out_conv_2 = math.floor(out_conv_2)
-        out_pool_2 = ((out_conv_2 - 1 * (self.kernel_2 - 1) - 1) / self.stride) + 1
-        out_pool_2 = math.floor(out_pool_2)
-
-        # Calcualte size of convolved/pooled features for convolution_3/max_pooling_3 features
-        out_conv_3 = ((self.embedding_size - 1 * (self.kernel_3 - 1) - 1) / self.stride) + 1
-        out_conv_3 = math.floor(out_conv_3)
-        out_pool_3 = ((out_conv_3 - 1 * (self.kernel_3 - 1) - 1) / self.stride) + 1
-        out_pool_3 = math.floor(out_pool_3)
-
-        # Returns "flattened" vector (input for fully connected layer)
-        return (out_pool_1 + out_pool_2 + out_pool_3) * self.out_size
-
-    # Define what to do on forward propagation
-    def forward(self, x):
-
-        # 1. Embedding Layer
-        x = self.embedding(x)
-
-        # 2. Conv layers
-        x1 = self.conv_1(x)
-        x1 = torch.relu(x1)
-        x1 = self.pool_1(x1)
-
-        # Convolution layer 2 is applied
-        x2 = self.conv_2(x)
-        x2 = torch.relu(x2)
-        x2 = self.pool_2(x2)
-
-        # Convolution layer 3 is applied
-        x3 = self.conv_3(x)
-        x3 = torch.relu(x3)
-        x3 = self.pool_3(x3)
-
-        # The output of each convolutional layer is concatenated into a unique vector
-        union = torch.cat((x1, x2, x3), 2)
-        union = union.reshape(union.size(0), -1)
-
-        # The "flattened" vector is passed through a fully connected layer
-        out = self.fc(union)
-        # Dropout is applied
-        m = nn.Dropout(p=0.2)
-        out = m(out)
-        # Activation function is applied
-        out = torch.sigmoid(out)
-
-        return out.squeeze()
-
 
 class DatasetMapper(Dataset):
 
@@ -266,8 +155,8 @@ def main():
     # Tokenize (tokenized sentence by sentence)
     tokenized_data = [word_tokenize(x) for x in data]
 
-    # Build dictionary (most common 500 words)
-    vocabulary = build_vocabulary(tokenized_data, 1000)
+    # Build dictionary (most common 2000 words)
+    vocabulary = build_vocabulary(tokenized_data, 2000)
 
     # Convert data to indexed form using dictionary
     # We get sentence by sentence tokenized/indexed data.
@@ -297,12 +186,12 @@ def main():
     net = Net(vocabulary, sequence_length)
 
     # Define optimizer
-    optimizer = optim.SGD(net.parameters(), lr=0.01, momentum=0.9)
+    optimizer = optim.RMSprop(net.parameters(), lr=0.001)
 
     # Define loss function
     criterion = nn.CrossEntropyLoss()
 
-    epochs = 3
+    epochs = 10
 
     # Starts training phase
     for epoch in range(epochs):
@@ -315,8 +204,6 @@ def main():
         # Starts batch training
         for x_batch, y_batch in train_loader:
 
-            print(len(x_batch))
-
             x_batch = x_batch.type(torch.LongTensor)
             y_batch = np.asarray(y_batch)
             y_batch = torch.tensor(y_batch)
@@ -324,9 +211,6 @@ def main():
 
             # Feed the model
             y_pred = net(x_batch)
-
-            print(y_batch)
-            print(y_pred)
 
             # Loss calculation
             loss = F.binary_cross_entropy(y_pred, y_batch)
