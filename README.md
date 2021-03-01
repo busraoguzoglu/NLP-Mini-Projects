@@ -8,3 +8,5 @@ CNN architecture based on: https://github.com/FernandoLpz/Text-Classification-CN
 TODO:
 Code will be refactored into files to increase readability..
 Metrics will be added..
+
+Final Results as is: Train accuracy: 0.89522, Test accuracy: 0.74270
