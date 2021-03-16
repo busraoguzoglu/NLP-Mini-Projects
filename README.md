@@ -1,5 +1,7 @@
 # NLP-Mini-Projects
 
+Some 'projects' to test things out.
+
 CNN-Based-News-Classifier: (CNN_model.py, convolutional_classifier.py)
 
 Text classification with CNN on Kaggle REAL and FAKE news dataset.
